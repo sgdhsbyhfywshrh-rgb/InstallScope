@@ -1,12 +1,12 @@
-name: rust
-
 # Phase 1 product code CI. Cheap and always-on: no sudo, no third-party package installs, no
 # untrusted install scripts. The gate workflows stay workflow_dispatch-only for those reasons; this
-# one runs on every push because Rules.md §6 requires `cargo fmt` + `clippy -D warnings` clean and
+# one runs on every push because Rules.md §6 requires cargo fmt + clippy -D warnings clean and
 # that is only true if it is checked.
 #
 # Rules.md §2 additionally bans .unwrap()/.expect() in non-test code. The crates deny those lints
 # internally via #![cfg_attr(not(test), deny(...))], so clippy here enforces it rather than a grep.
+
+name: rust
 
 on:
   push:
@@ -54,6 +54,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        # --all-targets so tests are linted too; the golden fixtures are where correctness lives.
+        #
+        # `-D warnings` is passed to clippy rather than set as a global RUSTFLAGS env var on purpose:
+        # RUSTFLAGS applies to dependency compilation as well, so a warning in any upstream crate
+        # would fail this build for reasons unrelated to our code.
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test
+        # No strace needed. Every test that touches a real process is both #[ignore]d and
+        # #![cfg(target_os = "linux")]; those run in phase1-e2e.yml, which installs strace.
+        run: cargo test --workspace --all-targets
+
+      - name: test-log (stdout)
+        run: node scripts/test-log.mjs --stdout
         run: cargo fmt --all -- --check
 
       - name: cargo clippy
